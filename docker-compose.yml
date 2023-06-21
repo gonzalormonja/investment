@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  investment:
+    container_name: investment
+    build:
+      context: .
+      args:
+        - DEV=true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/investment
+      - dev-static-data:/vol/web
+    # command: >
+    #   sh -c "python manage.py wait_for_db &&
+    #   python manage.py migrate &&
+    #   python manage.py runserver 0.0.0.0:8000"
+    command: >
+      sh -c "python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=user
+      - DB_PASSWORD=password
+    depends_on:
+      - investment-db
+
+  investment-db:
+    container_name: investment-db
+    image: postgres:13-alpine
+    volumes:
+      - dev-investment-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=devdb
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+
+volumes:
+  dev-investment-db-data:
+  dev-static-data:
