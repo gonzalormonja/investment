@@ -27,5 +27,4 @@ urlpatterns = [
         name="api-docs",
     ),
     path("api/bond/", include("bond.urls")),
-    path("api/corporate-bond/", include("corporate_bond.urls")),
 ]

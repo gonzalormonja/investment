@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "bond",
-    "corporate_bond"
 ]
 
 MIDDLEWARE = [
