@@ -20,8 +20,8 @@ services:
       sh -c "python manage.py migrate &&
       python manage.py runserver 0.0.0.0:8000"
     environment:
-      - DB_HOST=db
-      - DB_NAME=devdb
+      - DB_HOST=investment-db
+      - DB_NAME=investment
       - DB_USER=user
       - DB_PASSWORD=password
     depends_on:
@@ -30,10 +30,12 @@ services:
   investment-db:
     container_name: investment-db
     image: postgres:13-alpine
+    ports:
+      - "5431:5432"
     volumes:
       - dev-investment-db-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=devdb
+      - POSTGRES_DB=investment
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
 
