@@ -1,6 +1,8 @@
 from rest_framework import generics, viewsets
 from rest_framework.response import Response
 from selenium import webdriver
+from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from time import sleep
@@ -13,6 +15,8 @@ from drf_spectacular.utils import (
 )
 from bond.models import Bond, CashFlow
 from datetime import datetime
+from django.http import Http404
+from typing import List
 
 
 @extend_schema_view(
@@ -41,6 +45,54 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
         chrome_options.experimental_options["prefs"] = chrome_prefs
         chrome_prefs["profile.default_content_settings"] = {"images": 2}
         return chrome_options
+
+    def _get_element(
+        self, driver: WebDriver, xpath: str, raise_error: bool = True
+    ) -> WebElement:
+        """Get element from driver and return float"""
+        try:
+            elem = driver.find_element(
+                By.XPATH,
+                xpath,
+            )
+        except NoSuchElementException:
+            if raise_error:
+                raise Http404(f"Elemento no encontrado {xpath}")
+            else:
+                return None
+
+        return elem
+
+    def _get_elements(
+        self, driver: WebDriver, xpath: str, raise_error: bool = True
+    ) -> List[WebElement]:
+        """Get element from driver and return float"""
+        try:
+            elem = driver.find_elements(
+                By.XPATH,
+                xpath,
+            )
+        except NoSuchElementException:
+            if raise_error:
+                raise Http404(f"Elemento no encontrado {xpath}")
+            else:
+                return None
+
+        return elem
+
+    def _get_element_text(
+        self, driver: WebDriver, xpath: str, raise_error: bool = True
+    ) -> str:
+        """Get element from driver and return float"""
+        elem = self._get_element(driver, xpath, raise_error)
+        if elem.is_displayed():
+            return elem.text
+        else:
+            return elem.get_attribute("innerHTML")
+
+    def sanitize_decimal(self, value: str) -> str:
+        """Convert 32.500,00 to 32500.00"""
+        return value.replace(".", "").replace(",", ".")
 
     def list(self, request, *args, **kwargs):
         bond_names = self.request.query_params.get("bond_names").split(",")
@@ -76,7 +128,7 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
             else:
                 bad_gateway = True
                 tries = 0
-                while bad_gateway and tries <= 5:
+                while bad_gateway and tries <= 10:
                     driver.get(
                         f"https://bonds.mercapabbaco.com/bort/bondAnalysis?name={bond_name}"
                     )
@@ -85,67 +137,52 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                 if bad_gateway is True:
                     return Response("Bad gateway")
 
-                login_button = None
-                try:
-                    login_button = driver.find_element(
-                        By.XPATH,
-                        "/html/body/div[1]/main/section/div/div/div/form/div[3]/button",
-                    )
-                except NoSuchElementException:
-                    pass
+                login_button = self._get_element(
+                    driver,
+                    "/html/body/div[1]/main/section/div/div/div/form/div[3]/button",
+                    False,
+                )
 
                 if login_button is not None:
-                    driver.find_element(
-                        By.XPATH,
+                    self._get_element(
+                        driver,
                         "/html/body/div[1]/main/section/div/div/div/form/div[2]/div/div[1]/div/input",
                     ).send_keys("fake@gmail.com")
-                    driver.find_element(
-                        By.XPATH,
+                    self._get_element(
+                        driver,
                         "/html/body/div[1]/main/section/div/div/div/form/div[2]/div/div[2]/div/input",
                     ).send_keys("musculus19")
                     login_button.click()
                     sleep(10)
 
-                current_price = (
-                    driver.find_element(
-                        By.XPATH,
+                current_price = self.sanitize_decimal(
+                    self._get_element_text(
+                        driver,
                         "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[3]/div/strong",
                     )
-                    .get_attribute("innerHTML")
-                    .replace(".", "")
-                    .replace(",", ".")
                 )
-                current_tir = (
-                    driver.find_element(
-                        By.XPATH,
+                current_tir = self.sanitize_decimal(
+                    self._get_element_text(
+                        driver,
                         "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[1]/div/strong",
                     )
-                    .get_attribute("innerHTML")
-                    .replace(".", "")
-                    .replace(",", ".")
                 )
-                current_duration = (
-                    driver.find_element(
-                        By.XPATH,
+                current_duration = self.sanitize_decimal(
+                    self._get_element_text(
+                        driver,
                         "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[2]/div/strong",
                     )
-                    .get_attribute("innerHTML")
-                    .replace(".", "")
-                    .replace(",", ".")
                 )
-                current_parity = (
-                    driver.find_element(
-                        By.XPATH,
+                current_parity = self.sanitize_decimal(
+                    self._get_element_text(
+                        driver,
                         "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[4]/div/strong",
                     )
-                    .get_attribute("innerHTML")
-                    .replace(".", "")
-                    .replace(",", ".")
                 )
-                currency_code = driver.find_element(
-                    By.XPATH,
+                currency_code = self._get_element_text(
+                    driver,
                     "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[3]/div/span[2]/span[1]",
-                ).get_attribute("innerHTML")
+                )
 
                 if bond is not None:
                     if cash_flows is not None and len(cash_flows) > 0:
@@ -163,10 +200,10 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                         response = response + list(processed_cash_flow)
 
                 if bond is None:
-                    bond_type = driver.find_element(
-                        By.XPATH,
+                    bond_type = self._get_element_text(
+                        driver,
                         "/html/body/div[1]/div[3]/div/div/div/div[1]/div/h2/strong/small",
-                    ).text
+                    )
                     bond = Bond.objects.create(
                         name=bond_name,
                         type="corporative"
@@ -180,8 +217,8 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                         currency_code=currency_code,
                     )
                 if len(cash_flows) <= 0:
-                    payments = driver.find_elements(
-                        By.XPATH,
+                    payments = self._get_elements(
+                        driver,
                         "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[3]/div[2]/div/div/div[2]/div/div[2]/table/tbody/tr",
                     )
                     for payment in payments:
@@ -215,8 +252,8 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                         )
                     next_page_button = None
                     try:
-                        next_page_button = driver.find_element(
-                            By.XPATH,
+                        next_page_button = self._get_element(
+                            driver,
                             "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[3]/div[2]/div/div/div[2]/div/div[3]/div[2]/div/ul/li[2]/a",
                         )
                     except NoSuchElementException:
@@ -228,8 +265,8 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                     ):
                         next_page_button.click()
                         sleep(2)
-                        payments = driver.find_elements(
-                            By.XPATH,
+                        payments = self._get_elements(
+                            driver,
                             "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[3]/div[2]/div/div/div[2]/div/div[2]/table/tbody/tr",
                         )
                         for payment in payments:
