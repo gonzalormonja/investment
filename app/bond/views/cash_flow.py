@@ -112,8 +112,41 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                         "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[3]/div/strong",
                     )
                     .get_attribute("innerHTML")
+                    .replace(".", "")
                     .replace(",", ".")
                 )
+                current_tir = (
+                    driver.find_element(
+                        By.XPATH,
+                        "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[1]/div/strong",
+                    )
+                    .get_attribute("innerHTML")
+                    .replace(".", "")
+                    .replace(",", ".")
+                )
+                current_duration = (
+                    driver.find_element(
+                        By.XPATH,
+                        "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[2]/div/strong",
+                    )
+                    .get_attribute("innerHTML")
+                    .replace(".", "")
+                    .replace(",", ".")
+                )
+                current_parity = (
+                    driver.find_element(
+                        By.XPATH,
+                        "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[4]/div/strong",
+                    )
+                    .get_attribute("innerHTML")
+                    .replace(".", "")
+                    .replace(",", ".")
+                )
+                currency_code = driver.find_element(
+                    By.XPATH,
+                    "/html/body/div[1]/div[3]/div/div/div/div[2]/div[1]/div/div/div[1]/div[3]/div/span[2]/span[1]",
+                ).get_attribute("innerHTML")
+
                 if bond is not None:
                     if cash_flows is not None and len(cash_flows) > 0:
                         processed_cash_flow = map(
@@ -141,6 +174,10 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                         else "national",
                         last_scrap_date=datetime.now(),
                         last_scrap_price=current_price,
+                        last_scrap_tir=current_tir,
+                        last_scrap_duration=current_duration,
+                        last_scrap_parity=current_parity,
+                        currency_code=currency_code,
                     )
                 if len(cash_flows) <= 0:
                     payments = driver.find_elements(
@@ -149,14 +186,18 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                     )
                     for payment in payments:
                         date = payment.find_element(By.XPATH, "td[2]").text
-                        interest = payment.find_element(By.XPATH, "td[3]").text.replace(
-                            ",", "."
+                        interest = (
+                            payment.find_element(By.XPATH, "td[3]")
+                            .text.replace(".", "")
+                            .replace(",", ".")
                         )
-                        amortization = payment.find_element(
-                            By.XPATH, "td[4]"
-                        ).text.replace(",", ".")
                         percentage = "{:.2f}%".format(
                             (float(interest) / float(current_price)) * 100
+                        )
+                        amortization = (
+                            payment.find_element(By.XPATH, "td[4]")
+                            .text.replace(".", "")
+                            .replace(",", ".")
                         )
                         CashFlow.objects.create(
                             bond=bond,
@@ -193,11 +234,18 @@ class CashFlowViewSet(generics.ListAPIView, viewsets.GenericViewSet):
                         )
                         for payment in payments:
                             date = payment.find_element(By.XPATH, "td[2]").text
-                            interest = payment.find_element(
-                                By.XPATH, "td[3]"
-                            ).text.replace(",", ".")
+                            interest = (
+                                payment.find_element(By.XPATH, "td[3]")
+                                .text.replace(".", "")
+                                .replace(",", ".")
+                            )
                             percentage = "{:.2f}%".format(
                                 (float(interest) / float(current_price)) * 100
+                            )
+                            amortization = (
+                                payment.find_element(By.XPATH, "td[4]")
+                                .text.replace(".", "")
+                                .replace(",", ".")
                             )
                             CashFlow.objects.create(
                                 bond=bond,
